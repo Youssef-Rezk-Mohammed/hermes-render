@@ -17,10 +17,9 @@ RUN curl -fsSL https://github.com/caddyserver/caddy/releases/download/v2.8.4/cad
     && rm -f /tmp/caddy.tgz
 
 COPY scripts/sync.sh /usr/local/bin/sync.sh
-COPY scripts/setup.sh /usr/local/bin/setup.sh
 COPY scripts/gen-caddy.sh /usr/local/bin/gen-caddy.sh
 COPY cont-init.d/10-hermes-render /etc/cont-init.d/10-hermes-render
-RUN chmod +x /usr/local/bin/sync.sh /usr/local/bin/setup.sh /usr/local/bin/gen-caddy.sh /etc/cont-init.d/10-hermes-render
+RUN chmod +x /usr/local/bin/sync.sh /usr/local/bin/gen-caddy.sh /etc/cont-init.d/10-hermes-render
 
 # Keep the base image's /init entrypoint. It receives "gateway run" and runs the
 # supervised gateway + dashboard via its own s6 init. Do NOT override ENTRYPOINT.
