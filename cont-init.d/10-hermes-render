@@ -39,6 +39,8 @@ set_container_env() {
 dashboard_password="${DASHBOARD_PASSWORD:-}"
 dashboard_secret="$(printf '%s' "hermes-render-dashboard-v1:${dashboard_password}" | sha256sum | awk '{print $1}')"
 
+set_container_env HERMES_DASHBOARD "1"
+set_container_env HERMES_DASHBOARD_HOST "0.0.0.0"
 set_container_env HERMES_DASHBOARD_PORT "${PORT:-10000}"
 set_container_env HERMES_DASHBOARD_BASIC_AUTH_USERNAME "${DASHBOARD_USER:-admin}"
 set_container_env HERMES_DASHBOARD_BASIC_AUTH_PASSWORD "$dashboard_password"
