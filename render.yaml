@@ -7,17 +7,15 @@ services:
     dockerfilePath: ./Dockerfile
     healthCheckPath: /
     envVars:
-      # Built-in dashboard (supervised by the image's s6 init) — loopback only; Caddy proxies it publicly.
+      # Built-in dashboard, supervised by the image's s6 init.
       - key: HERMES_DASHBOARD
         sync: false
         value: "1"
       - key: HERMES_DASHBOARD_HOST
         sync: false
-        value: "127.0.0.1"
-      - key: HERMES_DASHBOARD_PORT
-        sync: false
-        value: "9119"
-      # Public proxy basic-auth (Caddy, listens on Render's $PORT)
+        value: "0.0.0.0"
+      # cont-init sets HERMES_DASHBOARD_PORT from Render's runtime $PORT and
+      # derives the built-in dashboard's auth variables from these values.
       - key: DASHBOARD_USER
         sync: false
         value: admin

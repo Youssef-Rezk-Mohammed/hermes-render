@@ -1,29 +1,50 @@
 #!/usr/bin/env bash
 # Runs at container boot (s6 cont-init stage), before the gateway/dashboard services start.
-set -e || true
+set -euo pipefail
 
 # 1. Restore persistent state from R2 (best-effort).
 /usr/local/bin/sync.sh down || true
 
-# 2. Seed Hermes config with the OpenCode Zen provider if not already present.
+# 2. Replace any image- or R2-provided config with the OpenCode Zen custom provider.
+# This prevents an old schema from blocking startup and ensures this service always
+# uses the provider configured in Render.
 mkdir -p /opt/data
-if [ ! -f /opt/data/config.yaml ]; then
-  cat > /opt/data/config.yaml <<EOF
+yaml_quote() {
+  printf "'%s'" "$(printf '%s' "$1" | sed "s/'/''/g")"
+}
+
+cat > /opt/data/config.yaml <<EOF
 model:
   provider: custom
-  default: ${OPENCODE_MODEL:-deepseek-v4-flash}
-  base_url: ${OPENCODE_BASE_URL:-https://opencode.ai/zen/v1}
-  api_key: ${OPENCODE_API_KEY:-}
+  default: $(yaml_quote "${OPENCODE_MODEL:-deepseek-v4-flash}")
+  base_url: $(yaml_quote "${OPENCODE_BASE_URL:-https://opencode.ai/zen/v1}")
+  api_key: $(yaml_quote "${OPENCODE_API_KEY:-}")
 EOF
-fi
 
-# 3. Generate the Caddyfile (public proxy + basic auth) using the injected $PORT.
-/usr/local/bin/gen-caddy.sh || true
+# 3. The upstream dashboard service starts after cont-init and uses
+# /command/with-contenv. Set its runtime configuration in s6's container envdir;
+# shell exports from this script would not be inherited by that service.
+set_container_env() {
+  local name="$1"
+  local value="$2"
+  local envdir="/run/s6/container_environment"
+  local temporary
 
-# 4. Start Caddy (public listener on $PORT -> loopback dashboard) detached.
-setsid bash -c 'exec caddy run --config /etc/caddy/Caddyfile' >/var/log/caddy.log 2>&1 &
+  temporary="$(mktemp "${envdir}/.${name}.XXXXXX")"
+  printf '%s' "$value" > "$temporary"
+  chmod 600 "$temporary"
+  mv -f "$temporary" "${envdir}/${name}"
+}
 
-# 5. Start the R2 sync loop (every 5 min) detached.
+dashboard_password="${DASHBOARD_PASSWORD:-}"
+dashboard_secret="$(printf '%s' "hermes-render-dashboard-v1:${dashboard_password}" | sha256sum | awk '{print $1}')"
+
+set_container_env HERMES_DASHBOARD_PORT "${PORT:-10000}"
+set_container_env HERMES_DASHBOARD_BASIC_AUTH_USERNAME "${DASHBOARD_USER:-admin}"
+set_container_env HERMES_DASHBOARD_BASIC_AUTH_PASSWORD "$dashboard_password"
+set_container_env HERMES_DASHBOARD_BASIC_AUTH_SECRET "$dashboard_secret"
+
+# 4. Start the R2 sync loop (every 5 min) detached.
 setsid bash -c 'while true; do sleep 300; /usr/local/bin/sync.sh up || true; done' >/var/log/sync.log 2>&1 &
 
 exit 0

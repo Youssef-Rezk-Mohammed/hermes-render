@@ -6,10 +6,10 @@ The LLM is **OpenCode Zen** (an OpenAI-compatible gateway) — the only provider
 
 ## What this repo deploys
 - The **official Hermes image's own s6 init** (`/init`, the inherited ENTRYPOINT) supervises
-  the gateway (`:8642`) and dashboard (loopback `:9119`).
+  the gateway (`:8642`) and dashboard (on Render's assigned `$PORT`).
 - A `cont-init.d` script runs at boot: restores `/opt/data` from R2, seeds
-  `~/.hermes/config.yaml` with the OpenCode Zen endpoint, starts **Caddy** (public
-  `$PORT` proxy with basic auth -> loopback dashboard), and starts the R2 sync loop.
+  `~/.hermes/config.yaml` with the OpenCode Zen endpoint, configures dashboard
+  basic auth, and starts the R2 sync loop.
 - No supervisord, no ENTRYPOINT override — we let the image manage its own lifecycle.
 
 ## 1. Cloudflare R2 (one-time, no card)
@@ -24,14 +24,16 @@ The LLM is **OpenCode Zen** (an OpenAI-compatible gateway) — the only provider
 
 ## 3. GitHub
 ```
-git add -A && git commit -m "boot via cont-init.d; Caddy proxy + R2 sync" && git push
+git add -A && git commit -m "expose Hermes dashboard directly on Render" && git push
 ```
 
 ## 4. Render
 1. New → **Web Service** → connect the repo.
 2. Runtime: **Docker**, Plan: **Free**, Branch: `main`.
 3. In **Environment**, fill the `sync: false` vars:
-   - `DASHBOARD_PASSWORD` — pick a strong password (user = `admin`).
+   - `DASHBOARD_PASSWORD` — pick a strong password (user = `admin`). It is used
+     by Hermes's built-in dashboard login; its stable session-signing secret is
+     derived at boot.
    - `R2_ENDPOINT`, `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `R2_BUCKET` (= `hermes-data`).
    - `OPENCODE_API_KEY` — your OpenCode Zen key.
    - `OPENCODE_BASE_URL` (default `https://opencode.ai/zen/v1`) — leave as-is.
@@ -42,7 +44,7 @@ git add -A && git commit -m "boot via cont-init.d; Caddy proxy + R2 sync" && git
 Create a free **UptimeRobot** monitor (HTTP, every 5 min) on your Render URL.
 
 ## 6. First login
-1. Open the URL → enter basic-auth (`admin` / your password).
+1. Open the URL → sign in with `admin` / your password.
 2. The dashboard **Models** page should show OpenCode Zen as the main model.
    If not, set provider = `custom`, base_url = `https://opencode.ai/zen/v1`, model = `deepseek-v4-flash`.
 3. `hermes gateway setup` (or dashboard) to connect Telegram etc.
