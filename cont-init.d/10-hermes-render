@@ -32,24 +32,9 @@ dashboard:
     secret: $(yaml_quote "$dashboard_secret")
 EOF
 
-# 3. The upstream dashboard service starts after cont-init and uses
-# /command/with-contenv. Set its runtime configuration in s6's container envdir;
-# shell exports from this script would not be inherited by that service.
-set_container_env() {
-  local name="$1"
-  local value="$2"
-  local envdir="/run/s6/container_environment"
-  local temporary
-
-  temporary="$(mktemp "${envdir}/.${name}.XXXXXX")"
-  printf '%s' "$value" > "$temporary"
-  chmod 600 "$temporary"
-  mv -f "$temporary" "${envdir}/${name}"
-}
-
-set_container_env HERMES_DASHBOARD "1"
-set_container_env HERMES_DASHBOARD_HOST "0.0.0.0"
-set_container_env HERMES_DASHBOARD_PORT "${PORT:-8080}"
+# 3. Dashboard host/port are baked as ENV in the Dockerfile (HERMES_DASHBOARD=1,
+# HERMES_DASHBOARD_HOST=0.0.0.0, HERMES_DASHBOARD_PORT=8080) so s6-overlay passes
+# them to the dashboard service reliably. No file-based injection needed here.
 
 # 4. Start the R2 sync loop (every 5 min) detached.
 setsid bash -c 'while true; do sleep 300; /usr/local/bin/sync.sh up || true; done' >/var/log/sync.log 2>&1 &
