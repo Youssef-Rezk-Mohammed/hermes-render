@@ -7,7 +7,7 @@ set -euo pipefail
 
 # 2. Replace any image- or R2-provided config with the OpenCode Zen custom provider.
 # This prevents an old schema from blocking startup and ensures this service always
-# uses the provider configured in Render.
+# uses the provider configured in Render/Back4app.
 mkdir -p /opt/data
 yaml_quote() {
   printf "'%s'" "$(printf '%s' "$1" | sed "s/'/''/g")"
@@ -49,7 +49,7 @@ set_container_env() {
 
 set_container_env HERMES_DASHBOARD "1"
 set_container_env HERMES_DASHBOARD_HOST "0.0.0.0"
-set_container_env HERMES_DASHBOARD_PORT "${PORT:-10000}"
+set_container_env HERMES_DASHBOARD_PORT "${PORT:-3000}"
 
 # 4. Start the R2 sync loop (every 5 min) detached.
 setsid bash -c 'while true; do sleep 300; /usr/local/bin/sync.sh up || true; done' >/var/log/sync.log 2>&1 &
