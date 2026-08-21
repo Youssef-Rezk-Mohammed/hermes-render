@@ -1,0 +1,29 @@
+#!/usr/bin/env bash
+# Runs at container boot (s6 cont-init stage), before the gateway/dashboard services start.
+set -e || true
+
+# 1. Restore persistent state from R2 (best-effort).
+/usr/local/bin/sync.sh down || true
+
+# 2. Seed Hermes config with the OpenCode Zen provider if not already present.
+mkdir -p /opt/data
+if [ ! -f /opt/data/config.yaml ]; then
+  cat > /opt/data/config.yaml <<EOF
+model:
+  provider: custom
+  default: ${OPENCODE_MODEL:-deepseek-v4-flash}
+  base_url: ${OPENCODE_BASE_URL:-https://opencode.ai/zen/v1}
+  api_key: ${OPENCODE_API_KEY:-}
+EOF
+fi
+
+# 3. Generate the Caddyfile (public proxy + basic auth) using the injected $PORT.
+/usr/local/bin/gen-caddy.sh || true
+
+# 4. Start Caddy (public listener on $PORT -> loopback dashboard) detached.
+setsid bash -c 'exec caddy run --config /etc/caddy/Caddyfile' >/var/log/caddy.log 2>&1 &
+
+# 5. Start the R2 sync loop (every 5 min) detached.
+setsid bash -c 'while true; do sleep 300; /usr/local/bin/sync.sh up || true; done' >/var/log/sync.log 2>&1 &
+
+exit 0

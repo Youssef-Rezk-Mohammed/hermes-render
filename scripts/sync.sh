@@ -1,7 +1,7 @@
 #!/bin/bash
 # Sync Hermes state (/opt/data) with a Cloudflare R2 bucket (S3-compatible).
 # Required env: R2_ENDPOINT, AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY, R2_BUCKET
-set -e
+set -e || true
 ACTION="${1:-up}"
 BUCKET="${R2_BUCKET:-hermes-data}"
 PREFIX="${R2_PREFIX:-data}"

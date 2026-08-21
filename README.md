@@ -5,10 +5,12 @@ with persistent memory via Cloudflare R2 so redeploys don't wipe sessions/skills
 The LLM is **OpenCode Zen** (an OpenAI-compatible gateway) — the only provider key you need.
 
 ## What this repo deploys
-- The **official Hermes image's own s6 init** supervises the gateway (`:8642`) and dashboard (`:$PORT`).
-- `wrap.sh` (ENTRYPOINT) sets `HERMES_DASHBOARD_PORT=$PORT` and execs `/init` so s6 owns the container.
-- `setup.sh` restores `/opt/data` from R2 and seeds `~/.hermes/config.yaml` with the OpenCode Zen endpoint.
-- `sync.sh` pushes `/opt/data` to Cloudflare R2 every 5 min (background loop) so state survives redeploys.
+- The **official Hermes image's own s6 init** (`/init`, the inherited ENTRYPOINT) supervises
+  the gateway (`:8642`) and dashboard (loopback `:9119`).
+- A `cont-init.d` script runs at boot: restores `/opt/data` from R2, seeds
+  `~/.hermes/config.yaml` with the OpenCode Zen endpoint, starts **Caddy** (public
+  `$PORT` proxy with basic auth -> loopback dashboard), and starts the R2 sync loop.
+- No supervisord, no ENTRYPOINT override — we let the image manage its own lifecycle.
 
 ## 1. Cloudflare R2 (one-time, no card)
 1. Cloudflare dashboard → **R2 Object Storage** → create bucket `hermes-data`.
@@ -22,15 +24,14 @@ The LLM is **OpenCode Zen** (an OpenAI-compatible gateway) — the only provider
 
 ## 3. GitHub
 ```
-git add -A && git commit -m "s6-native deployment (no supervisord)" && git push
+git add -A && git commit -m "boot via cont-init.d; Caddy proxy + R2 sync" && git push
 ```
 
 ## 4. Render
 1. New → **Web Service** → connect the repo.
 2. Runtime: **Docker**, Plan: **Free**, Branch: `main`.
 3. In **Environment**, fill the `sync: false` vars:
-   - `HERMES_DASHBOARD_BASIC_AUTH_PASSWORD` — pick a strong password (user = `admin`).
-   - `HERMES_DASHBOARD_BASIC_AUTH_SECRET` — a random string (restart-stable sessions).
+   - `DASHBOARD_PASSWORD` — pick a strong password (user = `admin`).
    - `R2_ENDPOINT`, `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `R2_BUCKET` (= `hermes-data`).
    - `OPENCODE_API_KEY` — your OpenCode Zen key.
    - `OPENCODE_BASE_URL` (default `https://opencode.ai/zen/v1`) — leave as-is.

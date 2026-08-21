@@ -7,25 +7,22 @@ services:
     dockerfilePath: ./Dockerfile
     healthCheckPath: /
     envVars:
-      # Public port (Render injects this; wrap.sh maps it to HERMES_DASHBOARD_PORT)
-      - key: PORT
-        sync: false
-      # Built-in dashboard (supervised by the image's s6 init)
+      # Built-in dashboard (supervised by the image's s6 init) — loopback only; Caddy proxies it publicly.
       - key: HERMES_DASHBOARD
         sync: false
         value: "1"
       - key: HERMES_DASHBOARD_HOST
         sync: false
-        value: "0.0.0.0"
-      # Basic-auth gate (required on a public bind)
-      - key: HERMES_DASHBOARD_BASIC_AUTH_USERNAME
+        value: "127.0.0.1"
+      - key: HERMES_DASHBOARD_PORT
+        sync: false
+        value: "9119"
+      # Public proxy basic-auth (Caddy, listens on Render's $PORT)
+      - key: DASHBOARD_USER
         sync: false
         value: admin
-      - key: HERMES_DASHBOARD_BASIC_AUTH_PASSWORD
+      - key: DASHBOARD_PASSWORD
         sync: false
-      - key: HERMES_DASHBOARD_BASIC_AUTH_SECRET
-        sync: false
-        value: "change-this-secret-to-a-random-string"
       # Cloudflare R2 (S3-compatible) for persistent /opt/data
       - key: R2_ENDPOINT
         sync: false   # e.g. https://<accountid>.r2.cloudflarestorage.com
