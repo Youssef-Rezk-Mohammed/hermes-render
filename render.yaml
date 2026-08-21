@@ -1,0 +1,45 @@
+services:
+  - type: web
+    name: hermes-agent
+    runtime: docker
+    plan: free
+    branch: main
+    dockerfilePath: ./Dockerfile
+    healthCheckPath: /
+    envVars:
+      # Public port (Render injects this; do not change the key name)
+      - key: PORT
+        sync: false
+      # Dashboard basic-auth (set these in the Render dashboard)
+      - key: DASHBOARD_USER
+        sync: false
+        value: admin
+      - key: DASHBOARD_PASSWORD
+        sync: false
+      # Cloudflare R2 (S3-compatible) for persistent /opt/data
+      - key: R2_ENDPOINT
+        sync: false   # e.g. https://<accountid>.r2.cloudflarestorage.com
+      - key: R2_BUCKET
+        sync: false
+        value: hermes-data
+      - key: R2_PREFIX
+        sync: false
+        value: data
+      - key: AWS_ACCESS_KEY_ID
+        sync: false
+      - key: AWS_SECRET_ACCESS_KEY
+        sync: false
+      # Model provider keys (fill in the Render dashboard)
+      - key: NOUS_PORTAL_TOKEN
+        sync: false
+      - key: GOOGLE_API_KEY
+        sync: false
+      - key: OPENCODE_ZEN_KEY
+        sync: false
+      # Internal dashboard bind (Caddy proxies it)
+      - key: HERMES_DASHBOARD_HOST
+        sync: false
+        value: "127.0.0.1"
+      - key: HERMES_DASHBOARD_PORT
+        sync: false
+        value: "9119"
