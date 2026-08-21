@@ -24,7 +24,7 @@ model:
   provider: custom
   default: $(yaml_quote "${OPENCODE_MODEL:-deepseek-v4-flash}")
   base_url: $(yaml_quote "${OPENCODE_BASE_URL:-https://opencode.ai/zen/v1}")
-  api_key: $(yaml_quote "${OPENCODE_API_KEY:-}")
+  api_key: $(yaml_quote "${OPENCODE_API_KEY:-${OPENCODE_ZEN_KEY:-}}")
 dashboard:
   basic_auth:
     username: $(yaml_quote "$dashboard_username")
