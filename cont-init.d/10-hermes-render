@@ -13,12 +13,23 @@ yaml_quote() {
   printf "'%s'" "$(printf '%s' "$1" | sed "s/'/''/g")"
 }
 
+dashboard_password="${DASHBOARD_PASSWORD:?DASHBOARD_PASSWORD must be set}"
+dashboard_username="${DASHBOARD_USER:-admin}"
+dashboard_secret="$(printf '%s' "hermes-render-dashboard-v1:${dashboard_password}" | sha256sum | awk '{print $1}')"
+dashboard_password_hash="$(printf '%s' "$dashboard_password" | python -c 'import sys; from plugins.dashboard_auth.basic import hash_password; print(hash_password(sys.stdin.read()))')"
+
 cat > /opt/data/config.yaml <<EOF
+_config_version: 12
 model:
   provider: custom
   default: $(yaml_quote "${OPENCODE_MODEL:-deepseek-v4-flash}")
   base_url: $(yaml_quote "${OPENCODE_BASE_URL:-https://opencode.ai/zen/v1}")
-  api_key: $(yaml_quote "${OPENCODE_API_KEY:-}")
+  api_key: $(yaml_quote "${OPENCODE_API_KEY:-${OPENCODE_ZEN_KEY:-}}")
+dashboard:
+  basic_auth:
+    username: $(yaml_quote "$dashboard_username")
+    password_hash: $(yaml_quote "$dashboard_password_hash")
+    secret: $(yaml_quote "$dashboard_secret")
 EOF
 
 # 3. The upstream dashboard service starts after cont-init and uses
@@ -36,15 +47,9 @@ set_container_env() {
   mv -f "$temporary" "${envdir}/${name}"
 }
 
-dashboard_password="${DASHBOARD_PASSWORD:-}"
-dashboard_secret="$(printf '%s' "hermes-render-dashboard-v1:${dashboard_password}" | sha256sum | awk '{print $1}')"
-
 set_container_env HERMES_DASHBOARD "1"
 set_container_env HERMES_DASHBOARD_HOST "0.0.0.0"
 set_container_env HERMES_DASHBOARD_PORT "${PORT:-10000}"
-set_container_env HERMES_DASHBOARD_BASIC_AUTH_USERNAME "${DASHBOARD_USER:-admin}"
-set_container_env HERMES_DASHBOARD_BASIC_AUTH_PASSWORD "$dashboard_password"
-set_container_env HERMES_DASHBOARD_BASIC_AUTH_SECRET "$dashboard_secret"
 
 # 4. Start the R2 sync loop (every 5 min) detached.
 setsid bash -c 'while true; do sleep 300; /usr/local/bin/sync.sh up || true; done' >/var/log/sync.log 2>&1 &
