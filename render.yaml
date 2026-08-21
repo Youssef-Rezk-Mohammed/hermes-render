@@ -7,15 +7,25 @@ services:
     dockerfilePath: ./Dockerfile
     healthCheckPath: /
     envVars:
-      # Public port (Render injects this; do not change the key name)
+      # Public port (Render injects this; wrap.sh maps it to HERMES_DASHBOARD_PORT)
       - key: PORT
         sync: false
-      # Dashboard basic-auth (set these in the Render dashboard)
-      - key: DASHBOARD_USER
+      # Built-in dashboard (supervised by the image's s6 init)
+      - key: HERMES_DASHBOARD
+        sync: false
+        value: "1"
+      - key: HERMES_DASHBOARD_HOST
+        sync: false
+        value: "0.0.0.0"
+      # Basic-auth gate (required on a public bind)
+      - key: HERMES_DASHBOARD_BASIC_AUTH_USERNAME
         sync: false
         value: admin
-      - key: DASHBOARD_PASSWORD
+      - key: HERMES_DASHBOARD_BASIC_AUTH_PASSWORD
         sync: false
+      - key: HERMES_DASHBOARD_BASIC_AUTH_SECRET
+        sync: false
+        value: "change-this-secret-to-a-random-string"
       # Cloudflare R2 (S3-compatible) for persistent /opt/data
       - key: R2_ENDPOINT
         sync: false   # e.g. https://<accountid>.r2.cloudflarestorage.com
@@ -29,7 +39,7 @@ services:
         sync: false
       - key: AWS_SECRET_ACCESS_KEY
         sync: false
-      # LLM provider: OpenCode Zen (OpenAI-compatible)
+      # LLM: OpenCode Zen (OpenAI-compatible)
       - key: OPENCODE_API_KEY
         sync: false   # your OpenCode Zen key
       - key: OPENCODE_BASE_URL
@@ -38,10 +48,3 @@ services:
       - key: OPENCODE_MODEL
         sync: false
         value: deepseek-v4-flash
-      # Internal dashboard bind (Caddy proxies it)
-      - key: HERMES_DASHBOARD_HOST
-        sync: false
-        value: "127.0.0.1"
-      - key: HERMES_DASHBOARD_PORT
-        sync: false
-        value: "9119"

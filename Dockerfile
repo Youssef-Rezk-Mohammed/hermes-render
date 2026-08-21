@@ -2,29 +2,22 @@ FROM nousresearch/hermes-agent:latest
 
 USER root
 
-# supervisor (process manager) + tooling
+# Tooling: AWS CLI for Cloudflare R2 sync (curl/unzip are already in the base image)
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends supervisor curl unzip ca-certificates gnupg \
+    && apt-get install -y --no-install-recommends curl unzip ca-certificates gnupg \
     && rm -rf /var/lib/apt/lists/*
 
-# Caddy (reverse proxy + basic auth in front of the dashboard)
-RUN curl -fsSL https://github.com/caddyserver/caddy/releases/download/v2.8.4/caddy_2.8.4_linux_amd64.tar.gz -o /tmp/caddy.tgz \
-    && tar -xzf /tmp/caddy.tgz -C /usr/local/bin caddy \
-    && rm -f /tmp/caddy.tgz
-
-# AWS CLI v2 (for Cloudflare R2 sync via S3-compatible API)
 RUN curl -fsSL https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip -o /tmp/awscliv2.zip \
     && unzip -q /tmp/awscliv2.zip -d /tmp/aws \
     && /tmp/aws/aws/install \
     && rm -rf /tmp/awscliv2.zip /tmp/aws
 
-# App files
-COPY supervisord.conf /etc/supervisor/conf.d/supervisord.conf
-COPY start.sh /usr/local/bin/start.sh
 COPY scripts/sync.sh /usr/local/bin/sync.sh
-RUN chmod +x /usr/local/bin/start.sh /usr/local/bin/sync.sh
+COPY setup.sh /usr/local/bin/setup.sh
+COPY wrap.sh /usr/local/bin/wrap.sh
+RUN chmod +x /usr/local/bin/sync.sh /usr/local/bin/setup.sh /usr/local/bin/wrap.sh
 
-EXPOSE 8080
-
-# Supervisord runs as root so it can start all child processes.
-CMD ["/usr/local/bin/start.sh"]
+# The base image's s6 init (/init) supervises gateway + dashboard natively.
+# wrap.sh sets env (dashboard port = $PORT) and execs /init so s6 sees it.
+ENTRYPOINT ["/usr/local/bin/wrap.sh"]
+CMD ["gateway", "run"]
