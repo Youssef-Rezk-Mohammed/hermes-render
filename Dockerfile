@@ -20,7 +20,6 @@ RUN curl -fsSL https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip -o /tmp/
 
 # App files
 COPY supervisord.conf /etc/supervisor/conf.d/supervisord.conf
-COPY Caddyfile /etc/caddy/Caddyfile.tmpl
 COPY start.sh /usr/local/bin/start.sh
 COPY scripts/sync.sh /usr/local/bin/sync.sh
 RUN chmod +x /usr/local/bin/start.sh /usr/local/bin/sync.sh
