@@ -16,6 +16,11 @@ COPY scripts/sync.sh /usr/local/bin/sync.sh
 COPY cont-init.d/10-hermes-render /etc/cont-init.d/10-hermes-render
 RUN chmod +x /usr/local/bin/sync.sh /etc/cont-init.d/10-hermes-render
 
+# Back4app requires the Dockerfile to EXPOSE a port (its launch validator rejects
+# images that don't). The dashboard binds $PORT at runtime; 8080 matches the
+# Back4app "Port" setting. EXPOSE is documentation/manifest only.
+EXPOSE 8080
+
 # Keep the base image's /init entrypoint. It receives "gateway run" and runs the
 # supervised gateway + dashboard via its own s6 init. Do NOT override ENTRYPOINT.
 CMD ["gateway", "run"]
