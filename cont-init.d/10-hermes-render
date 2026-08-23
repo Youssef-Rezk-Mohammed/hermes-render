@@ -37,4 +37,38 @@ setsid bash -c 'cd /srv/health && while true; do python3 -m http.server '"$PORT"
 # 5. Push state to R2 every 5 minutes (detached).
 setsid bash -c 'while true; do sleep 300; /usr/local/bin/sync.sh up || true; done' >/var/log/sync.log 2>&1 &
 
+# 6. Self-healing Telegram watchdog.
+# Problem: Back4app redeploys overlap old+new containers; during that window both
+# poll Telegram, the new gateway can exhaust its retry budget, give up, and sit
+# deaf forever. Detection: three consecutive HTTP 200 getUpdates probes (spaced
+# 45s) means NOBODY currently holds the long-poll slot — including our own
+# gateway (an active poller would answer 409 Conflict). Remedy: kill the gateway
+# process; s6 supervision auto-restarts it and it claims the free slot.
+if [ -n "${TELEGRAM_BOT_TOKEN:-}" ]; then
+  setsid bash -c '
+    sleep 420                      # allow normal first-boot connection attempt
+    while true; do
+      hook=$(curl -s --max-time 15 "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/getWebhookInfo" \
+             | tr -d " \n" | grep -c "\"url\":\"\"") || hook=0
+      if [ "$hook" != "0" ]; then  # webhook mode configured; never interfere
+        sleep 300; continue
+      fi
+      a=$(curl -s --max-time 15 -o /dev/null -w "%{http_code}" \
+          "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/getUpdates?timeout=0")
+      sleep 45
+      b=$(curl -s --max-time 15 -o /dev/null -w "%{http_code}" \
+          "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/getUpdates?timeout=0")
+      sleep 45
+      c=$(curl -s --max-time 15 -o /dev/null -w "%{http_code}" \
+          "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/getUpdates?timeout=0")
+      if [ "$a" = "200" ] && [ "$b" = "200" ] && [ "$c" = "200" ]; then
+        echo "$(date -u +%FT%TZ) no active Telegram poller; restarting gateway" >> /var/log/tg-watchdog.log
+        pkill -f "gateway run" || pkill -f "hermes_cli.main" || true
+        sleep 120                   # give the fresh gateway time to claim the slot
+      else
+        sleep 180
+      fi
+    done' >/dev/null 2>&1 &
+fi
+
 exit 0
