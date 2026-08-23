@@ -60,3 +60,4 @@ git add -A && git commit -m "Back4app-ready: bind \$PORT, R2 sync, OpenCode Zen"
 - Gateway-only deployment on Back4app Containers free tier
 - Model: hy3-free via built-in opencode-zen provider (free SKU, no payment method)
 - Interface: Telegram bot (no inbound ports needed)
+- Redeployed cleanly at 09:45 UTC after polling-conflict resolution (single-instance confirmed)
