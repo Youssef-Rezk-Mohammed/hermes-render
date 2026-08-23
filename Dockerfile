@@ -16,20 +16,14 @@ COPY scripts/sync.sh /usr/local/bin/sync.sh
 COPY cont-init.d/10-hermes-render /etc/cont-init.d/10-hermes-render
 RUN chmod +x /usr/local/bin/sync.sh /etc/cont-init.d/10-hermes-render
 
-# Back4app requires the Dockerfile to EXPOSE a port (its launch validator rejects
-# images that don't). The dashboard binds $PORT at runtime; 8080 matches the
-# Back4app "Port" setting. EXPOSE is documentation/manifest only.
+# Back4app requires an exposed TCP port. The web dashboard stays DISABLED
+# (HERMES_DASHBOARD intentionally unset): a public non-loopback dashboard bind
+# requires a registered auth provider (June 2026 hardening), and the free-tier
+# 256 MB RAM leaves little headroom. Instead, a static health stub serves
+# $PORT (8080) so platform health checks pass.
 EXPOSE 8080
 
-# Dashboard runtime config baked as ENV so s6-overlay reliably propagates it to
-# the supervised dashboard service. Port-injection via cont-init file writes was
-# fragile and left the dashboard on its default loopback :9119 (nothing on 8080).
-# Port 8080 matches the Back4app "Port" setting. DASHBOARD_PASSWORD / OPENCODE_*
-# stay as Back4app runtime env vars (secrets must not be baked into the image).
-ENV HERMES_DASHBOARD=1 \
-    HERMES_DASHBOARD_HOST=0.0.0.0 \
-    HERMES_DASHBOARD_PORT=8080
+# Management happens through messaging platforms (Telegram, etc.), which dial
+# outbound and need no inbound ports.
 
-# Keep the base image's /init entrypoint. It receives "gateway run" and runs the
-# supervised gateway + dashboard via its own s6 init. Do NOT override ENTRYPOINT.
 CMD ["gateway", "run"]

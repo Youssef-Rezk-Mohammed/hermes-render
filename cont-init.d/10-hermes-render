@@ -1,42 +1,40 @@
 #!/usr/bin/env bash
-# Runs at container boot (s6 cont-init stage), before the gateway/dashboard services start.
+# Boot-time setup for GATEWAY-ONLY Hermes on Back4app Containers (free tier).
+# Runs in the s6 cont-init stage, before any service starts.
 set -euo pipefail
 
-# 1. Restore persistent state from R2 (best-effort).
+PORT="${PORT:-8080}"
+
+# 1. Restore persistent state from R2 (best-effort; skipped when R2 vars unset).
 /usr/local/bin/sync.sh down || true
 
-# 2. Replace any image- or R2-provided config with the OpenCode Zen custom provider.
-# This prevents an old schema from blocking startup and ensures this service always
-# uses the provider configured in Render/Back4app.
 mkdir -p /opt/data
-yaml_quote() {
-  printf "'%s'" "$(printf '%s' "$1" | sed "s/'/''/g")"
-}
 
-dashboard_password="${DASHBOARD_PASSWORD:?DASHBOARD_PASSWORD must be set}"
-dashboard_username="${DASHBOARD_USER:-admin}"
-dashboard_secret="$(printf '%s' "hermes-render-dashboard-v1:${dashboard_password}" | sha256sum | awk '{print $1}')"
-dashboard_password_hash="$(printf '%s' "$dashboard_password" | python -c 'import sys; from plugins.dashboard_auth.basic import hash_password; print(hash_password(sys.stdin.read()))')"
+# 2. Secrets go in /opt/data/.env (Hermes convention) — never in config.yaml.
+if [ -n "${OPENCODE_ZEN_API_KEY:-${OPENCODE_API_KEY:-}}" ]; then
+  touch /opt/data/.env
+  grep -v '^OPENCODE_ZEN_API_KEY=' /opt/data/.env > /opt/data/.env.tmp || true
+  printf 'OPENCODE_ZEN_API_KEY=%s\n' "${OPENCODE_ZEN_API_KEY:-${OPENCODE_API_KEY:-}}" >> /opt/data/.env.tmp
+  chmod 600 /opt/data/.env.tmp
+  mv /opt/data/.env.tmp /opt/data/.env
+fi
 
+# 3. Minimal config using the BUILT-IN opencode-zen provider plugin — no custom
+# provider plumbing, no dashboard auth. The web dashboard stays disabled.
 cat > /opt/data/config.yaml <<EOF
 _config_version: 12
 model:
-  provider: custom
-  default: $(yaml_quote "${OPENCODE_MODEL:-deepseek-v4-flash}")
-  base_url: $(yaml_quote "${OPENCODE_BASE_URL:-https://opencode.ai/zen/v1}")
-  api_key: $(yaml_quote "${OPENCODE_API_KEY:-${OPENCODE_ZEN_KEY:-}}")
-dashboard:
-  basic_auth:
-    username: $(yaml_quote "$dashboard_username")
-    password_hash: $(yaml_quote "$dashboard_password_hash")
-    secret: $(yaml_quote "$dashboard_secret")
+  provider: opencode-zen
+  default: ${OPENCODE_MODEL:-deepseek-v4-flash}
 EOF
 
-# 3. Dashboard host/port are baked as ENV in the Dockerfile (HERMES_DASHBOARD=1,
-# HERMES_DASHBOARD_HOST=0.0.0.0, HERMES_DASHBOARD_PORT=8080) so s6-overlay passes
-# them to the dashboard service reliably. No file-based injection needed here.
+# 4. Static health endpoint on $PORT (Back4app probes http://host:$PORT/).
+# Serves a fixed tiny directory — NEVER /opt/data (no secret file exposure).
+mkdir -p /srv/health
+printf 'hermes gateway running\n' > /srv/health/index.html
+setsid bash -c 'cd /srv/health && while true; do python3 -m http.server '"$PORT"' --bind 0.0.0.0 >/var/log/health-stub.log 2>&1 || true; sleep 1; done' >/dev/null 2>&1 &
 
-# 4. Start the R2 sync loop (every 5 min) detached.
+# 5. Push state to R2 every 5 minutes (detached).
 setsid bash -c 'while true; do sleep 300; /usr/local/bin/sync.sh up || true; done' >/var/log/sync.log 2>&1 &
 
 exit 0
