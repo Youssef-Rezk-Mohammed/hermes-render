@@ -54,3 +54,9 @@ git add -A && git commit -m "Back4app-ready: bind \$PORT, R2 sync, OpenCode Zen"
 - `sync.sh` runs every 5 min; a hard kill between syncs can lose <5 min of changes.
 - 256 MB RAM is tight for dashboard + gateway; if it OOMs, bump to the $5 Shared plan (512 MB).
 - OpenCode Zen uses pay-per-use billing — watch your Zen credits.
+
+## Status (2026-08-23)
+
+- Gateway-only deployment on Back4app Containers free tier
+- Model: hy3-free via built-in opencode-zen provider (free SKU, no payment method)
+- Interface: Telegram bot (no inbound ports needed)
