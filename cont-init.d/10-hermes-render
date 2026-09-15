@@ -39,35 +39,53 @@ setsid bash -c 'while true; do sleep 300; /usr/local/bin/sync.sh up || true; don
 
 # 6. Self-healing Telegram watchdog.
 # Problem: Back4app redeploys overlap old+new containers; during that window both
-# poll Telegram, the new gateway can exhaust its retry budget, give up, and sit
-# deaf forever. Detection: three consecutive HTTP 200 getUpdates probes (spaced
-# 45s) means NOBODY currently holds the long-poll slot — including our own
-# gateway (an active poller would answer 409 Conflict). Remedy: kill the gateway
+# poll Telegram. get-updates probing is forbidden because it steals the long-poll
+# slot — the newcomer is always served 200 while the pending request gets 409, and
+# the gateway's 5-retry conflict budget gets burned until it goes deaf.
+# Safe signal: pending_update_count growth via getWebhookInfo (a read-only endpoint).
+# Updates accumulate only when nobody fetches them. Remedy: kill the gateway
 # process; s6 supervision auto-restarts it and it claims the free slot.
 if [ -n "${TELEGRAM_BOT_TOKEN:-}" ]; then
   setsid bash -c '
     sleep 420                      # allow normal first-boot connection attempt
+    streak=0
     while true; do
-      hook=$(curl -s --max-time 15 "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/getWebhookInfo" \
-             | tr -d " \n" | grep -c "\"url\":\"\"") || hook=0
+      resp=$(curl -s --max-time 15 "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/getWebhookInfo" \
+             | tr -d " \n") || resp=""
+      
+      if [ -z "$resp" ]; then
+        streak=0
+        sleep 300
+        continue
+      fi
+
+      hook=$(printf "%s" "$resp" | grep -c "\"url\":\"\"") || hook=0
       if [ "$hook" = "0" ]; then  # webhook mode configured; never interfere
         sleep 300; continue
       fi
-      a=$(curl -s --max-time 15 -o /dev/null -w "%{http_code}" \
-          "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/getUpdates?timeout=0")
-      sleep 45
-      b=$(curl -s --max-time 15 -o /dev/null -w "%{http_code}" \
-          "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/getUpdates?timeout=0")
-      sleep 45
-      c=$(curl -s --max-time 15 -o /dev/null -w "%{http_code}" \
-          "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/getUpdates?timeout=0")
-      if [ "$a" = "200" ] && [ "$b" = "200" ] && [ "$c" = "200" ]; then
-        echo "$(date -u +%FT%TZ) no active Telegram poller; restarting gateway" >> /var/log/tg-watchdog.log
-        pkill -f "gateway run" || pkill -f "hermes_cli.main" || true
-        sleep 120                   # give the fresh gateway time to claim the slot
-      else
-        sleep 180
+
+      pending=$(printf "%s" "$resp" | sed -n '\''s/.*"pending_update_count":\([0-9][0-9]*\).*/\1/p'\'')
+      if [ -z "$pending" ]; then
+        streak=0
+        sleep 300
+        continue
       fi
+
+      if [ "$pending" -gt 0 ]; then
+        streak=$((streak + 1))
+      else
+        streak=0
+      fi
+
+      if [ "$streak" -ge 3 ]; then
+        echo "$(date -u +%FT%TZ) unconsumed updates detected (count: $pending); restarting gateway" >> /var/log/tg-watchdog.log
+        pkill -f "gateway run" || pkill -f "hermes_cli.main" || true
+        streak=0
+        sleep 120                   # give the fresh gateway time to claim the slot
+        continue
+      fi
+      
+      sleep 300
     done' >/dev/null 2>&1 &
 fi
 
