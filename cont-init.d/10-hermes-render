@@ -11,21 +11,21 @@ PORT="${PORT:-8080}"
 mkdir -p /opt/data
 
 # 2. Secrets go in /opt/data/.env (Hermes convention) — never in config.yaml.
-if [ -n "${OPENCODE_ZEN_API_KEY:-${OPENCODE_API_KEY:-}}" ]; then
+if [ -n "${GEMINI_API_KEY:-${GOOGLE_API_KEY:-}}" ]; then
   touch /opt/data/.env
-  grep -v '^OPENCODE_ZEN_API_KEY=' /opt/data/.env > /opt/data/.env.tmp || true
-  printf 'OPENCODE_ZEN_API_KEY=%s\n' "${OPENCODE_ZEN_API_KEY:-${OPENCODE_API_KEY:-}}" >> /opt/data/.env.tmp
+  grep -v -e '^GEMINI_API_KEY=' -e '^GOOGLE_API_KEY=' -e '^OPENCODE_ZEN_API_KEY=' /opt/data/.env > /opt/data/.env.tmp || true
+  printf 'GEMINI_API_KEY=%s\n' "${GEMINI_API_KEY:-${GOOGLE_API_KEY:-}}" >> /opt/data/.env.tmp
   chmod 600 /opt/data/.env.tmp
   mv /opt/data/.env.tmp /opt/data/.env
 fi
 
-# 3. Minimal config using the BUILT-IN opencode-zen provider plugin — no custom
+# 3. Minimal config using the BUILT-IN gemini provider plugin — no custom
 # provider plumbing, no dashboard auth. The web dashboard stays disabled.
 cat > /opt/data/config.yaml <<EOF
 _config_version: 12
 model:
-  provider: opencode-zen
-  default: ${OPENCODE_MODEL:-deepseek-v4-flash}
+  provider: gemini
+  default: ${GEMINI_MODEL:-gemini-3.6-flash}
 EOF
 
 # 4. Static health endpoint on $PORT (Back4app probes http://host:$PORT/).

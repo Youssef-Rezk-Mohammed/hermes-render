@@ -1,8 +1,8 @@
-# Hermes Agent on Back4app Containers (Free, No Credit Card) — powered by OpenCode Zen
+# Hermes Agent on Back4app Containers (Free, No Credit Card) — powered by Google AI Studio (Gemini)
 
 Self-hosted Hermes Agent (gateway-only) on **Back4app Containers** free tier,
 with persistent memory via Cloudflare R2 so redeploys don't wipe sessions/skills.
-The LLM is **OpenCode Zen** (an OpenAI-compatible gateway) — the only provider key you need.
+The LLM is **Google AI Studio (Gemini)** — the only provider key you need.
 
 > Why Back4app: free tier needs **no credit card**, gives **256 MB RAM / 0.25 CPU / 100 GB transfer**,
 > and **does not force your container to sleep**. It assigns a `$PORT` env var and routes traffic there.
@@ -11,7 +11,7 @@ The LLM is **OpenCode Zen** (an OpenAI-compatible gateway) — the only provider
 - The **official Hermes image's own s6 init** (`/init`, the inherited ENTRYPOINT) supervises
   the gateway (`:8642`) and a static health page (bound to Back4app's `$PORT` on `0.0.0.0`).
 - A `cont-init.d` script runs at boot: restores `/opt/data` from R2, writes
-  `/opt/data/config.yaml` with the built-in opencode-zen provider, and starts
+  `/opt/data/config.yaml` with the built-in gemini provider, and starts
   the R2 sync loop.
 - No supervisord, no ENTRYPOINT override — we let the image manage its own lifecycle.
 
@@ -21,13 +21,13 @@ The LLM is **OpenCode Zen** (an OpenAI-compatible gateway) — the only provider
 3. **R2 Object Storage → API tokens → User API Tokens → Create API token**
    (leave IP filtering empty) → save **Access Key ID** + **Secret Access Key**.
 
-## 2. OpenCode Zen key
-- Get your API key from https://opencode.ai/zen (OpenCode ZEN key).
-- Note the model you want, e.g. `deepseek-v4-flash` (a free Zen chat model).
+## 2. Google AI Studio key
+- Get your API key from https://aistudio.google.com/apikey. Free, no credit card.
+- Note the model default and the GEMINI_MODEL override.
 
 ## 3. GitHub
 ```bash
-git add -A && git commit -m "Back4app-ready: bind \$PORT, R2 sync, OpenCode Zen" && git push
+git add -A && git commit -m "Back4app-ready: bind \$PORT, R2 sync, Gemini" && git push
 ```
 
 ## 4. Back4app Containers
@@ -38,9 +38,8 @@ git add -A && git commit -m "Back4app-ready: bind \$PORT, R2 sync, OpenCode Zen"
 4. Add **Environment Variables**:
    - `TELEGRAM_BOT_TOKEN` — **required** to use the Telegram interface.
    - `R2_ENDPOINT`, `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `R2_BUCKET` (= `hermes-data`).
-   - `OPENCODE_API_KEY` (or `OPENCODE_ZEN_KEY`) — your OpenCode Zen key.
-   - `OPENCODE_BASE_URL` = `https://opencode.ai/zen/v1` (default).
-   - `OPENCODE_MODEL` = `deepseek-v4-flash` (default, any Zen chat model).
+   - `GEMINI_API_KEY` (or `GOOGLE_API_KEY`) — your Google AI Studio key.
+   - `GEMINI_MODEL` = `gemini-3.6-flash` (default; set e.g. `gemini-3.7-flash` or a pro model to override).
 5. Deploy. Back4app gives you a public URL.
 
 ## 5. First use
@@ -51,11 +50,11 @@ git add -A && git commit -m "Back4app-ready: bind \$PORT, R2 sync, OpenCode Zen"
 ## Notes / gotchas
 - Free tier has **no persistent disk**, so R2 sync preserves state across redeploys.
 - `sync.sh` runs every 5 min; a hard kill between syncs can lose <5 min of changes.
-- OpenCode Zen uses pay-per-use billing — watch your Zen credits.
+- AI Studio free tier has per-minute/per-day rate limits — when exceeded the API returns 429 errors; it never auto-charges (paid usage requires explicitly linking a billing account in Google AI Studio).
 
-## Status (2026-08-23)
+## Status (2026-09-14)
 
 - Gateway-only deployment on Back4app Containers free tier
-- Model: hy3-free via built-in opencode-zen provider (free SKU, no payment method)
+- Model: gemini-3.6-flash via built-in gemini provider (AI Studio free tier, no payment method)
 - Interface: Telegram bot (no inbound ports needed)
 - Redeployed cleanly at 09:45 UTC after polling-conflict resolution (single-instance confirmed)
