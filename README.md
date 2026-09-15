@@ -1,6 +1,6 @@
 # Hermes Agent on Back4app Containers (Free, No Credit Card) — powered by OpenCode Zen
 
-Self-hosted Hermes Agent (gateway + web dashboard) on **Back4app Containers** free tier,
+Self-hosted Hermes Agent (gateway-only) on **Back4app Containers** free tier,
 with persistent memory via Cloudflare R2 so redeploys don't wipe sessions/skills.
 The LLM is **OpenCode Zen** (an OpenAI-compatible gateway) — the only provider key you need.
 
@@ -9,9 +9,9 @@ The LLM is **OpenCode Zen** (an OpenAI-compatible gateway) — the only provider
 
 ## What this repo deploys
 - The **official Hermes image's own s6 init** (`/init`, the inherited ENTRYPOINT) supervises
-  the gateway (`:8642`) and the dashboard (bound to Back4app's `$PORT` on `0.0.0.0`).
+  the gateway (`:8642`) and a static health page (bound to Back4app's `$PORT` on `0.0.0.0`).
 - A `cont-init.d` script runs at boot: restores `/opt/data` from R2, writes
-  `~/.hermes/config.yaml` with the OpenCode Zen endpoint + dashboard basic auth, and starts
+  `/opt/data/config.yaml` with the built-in opencode-zen provider, and starts
   the R2 sync loop.
 - No supervisord, no ENTRYPOINT override — we let the image manage its own lifecycle.
 
@@ -36,23 +36,21 @@ git add -A && git commit -m "Back4app-ready: bind \$PORT, R2 sync, OpenCode Zen"
 3. Dockerfile path: `./Dockerfile`. In app settings set the **Port** to the value Back4app
    shows as `$PORT` (the app also reads `$PORT` automatically).
 4. Add **Environment Variables**:
-   - `DASHBOARD_PASSWORD` — **required** (the script fails if missing; user = `admin`).
+   - `TELEGRAM_BOT_TOKEN` — **required** to use the Telegram interface.
    - `R2_ENDPOINT`, `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `R2_BUCKET` (= `hermes-data`).
    - `OPENCODE_API_KEY` (or `OPENCODE_ZEN_KEY`) — your OpenCode Zen key.
    - `OPENCODE_BASE_URL` = `https://opencode.ai/zen/v1` (default).
    - `OPENCODE_MODEL` = `deepseek-v4-flash` (default, any Zen chat model).
 5. Deploy. Back4app gives you a public URL.
 
-## 5. First login
-1. Open the URL → sign in with `admin` / your `DASHBOARD_PASSWORD`.
-2. The dashboard **Models** page should show OpenCode Zen as the main model.
-   If not, set provider = `custom`, base_url = `https://opencode.ai/zen/v1`, model = `deepseek-v4-flash`.
-3. Use the dashboard (or `hermes gateway setup`) to connect Telegram etc.
+## 5. First use
+1. Open the Back4app public URL. You should see a "hermes gateway running" health page.
+2. If you haven't already, set `TELEGRAM_BOT_TOKEN` in the Back4app environment variables.
+3. Talk to your Telegram bot. The gateway will answer.
 
 ## Notes / gotchas
 - Free tier has **no persistent disk**, so R2 sync preserves state across redeploys.
 - `sync.sh` runs every 5 min; a hard kill between syncs can lose <5 min of changes.
-- 256 MB RAM is tight for dashboard + gateway; if it OOMs, bump to the $5 Shared plan (512 MB).
 - OpenCode Zen uses pay-per-use billing — watch your Zen credits.
 
 ## Status (2026-08-23)
