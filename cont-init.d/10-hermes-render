@@ -42,13 +42,14 @@ setsid bash -c 'while true; do sleep 300; /usr/local/bin/sync.sh up || true; don
 # poll Telegram. get-updates probing is forbidden because it steals the long-poll
 # slot — the newcomer is always served 200 while the pending request gets 409, and
 # the gateway's 5-retry conflict budget gets burned until it goes deaf.
-# Safe signal: pending_update_count growth via getWebhookInfo (a read-only endpoint).
-# Updates accumulate only when nobody fetches them. Remedy: kill the gateway
-# process; s6 supervision auto-restarts it and it claims the free slot.
+# Safe signal: stagnant or growing pending_update_count via getWebhookInfo (a read-only endpoint).
+# Decreasing count proves healthy drain. Updates accumulate only when nobody fetches them.
+# Remedy: kill the gateway process; s6 supervision auto-restarts it and it claims the free slot.
 if [ -n "${TELEGRAM_BOT_TOKEN:-}" ]; then
   setsid bash -c '
     sleep 420                      # allow normal first-boot connection attempt
     streak=0
+    last_pending=""
     while true; do
       resp=$(curl -s --max-time 15 "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/getWebhookInfo" \
              | tr -d " \n") || resp=""
@@ -72,15 +73,21 @@ if [ -n "${TELEGRAM_BOT_TOKEN:-}" ]; then
       fi
 
       if [ "$pending" -gt 0 ]; then
-        streak=$((streak + 1))
+        if [ -z "${last_pending:-}" ] || [ "$pending" -ge "$last_pending" ]; then
+          streak=$((streak + 1))
+        else
+          streak=0
+        fi
       else
         streak=0
       fi
+      last_pending=$pending
 
       if [ "$streak" -ge 3 ]; then
         echo "$(date -u +%FT%TZ) unconsumed updates detected (count: $pending); restarting gateway" >> /var/log/tg-watchdog.log
         pkill -f "gateway run" || pkill -f "hermes_cli.main" || true
         streak=0
+        last_pending=""
         sleep 120                   # give the fresh gateway time to claim the slot
         continue
       fi
