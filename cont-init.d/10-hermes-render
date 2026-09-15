@@ -50,7 +50,7 @@ if [ -n "${TELEGRAM_BOT_TOKEN:-}" ]; then
     while true; do
       hook=$(curl -s --max-time 15 "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/getWebhookInfo" \
              | tr -d " \n" | grep -c "\"url\":\"\"") || hook=0
-      if [ "$hook" != "0" ]; then  # webhook mode configured; never interfere
+      if [ "$hook" = "0" ]; then  # webhook mode configured; never interfere
         sleep 300; continue
       fi
       a=$(curl -s --max-time 15 -o /dev/null -w "%{http_code}" \
